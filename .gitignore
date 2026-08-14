@@ -1,0 +1,18 @@
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# PHP
+vendor/
+*.log
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Cache / temporários
+*.cache
+*.tmp
