@@ -3,16 +3,13 @@ require_once __DIR__ . '/includes/auth.php';
 
 exigir_login();
 
+// Filtro inicial vem da URL (compartilhável), mas a lista completa é
+// carregada para permitir filtragem instantânea no navegador, sem
+// precisar recarregar a página a cada letra digitada.
 $busca = trim($_GET['busca'] ?? '');
 $categoria = trim($_GET['categoria'] ?? '');
 
-$produtos = listar_produtos($busca ?: null, $categoria ?: null);
-
-if (isset($_GET['ajax'])) {
-    require __DIR__ . '/includes/resultados_produtos.php';
-    exit;
-}
-
+$produtos = listar_produtos();
 $categorias = listar_categorias();
 
 $tituloPagina = 'Início';
@@ -43,7 +40,7 @@ require __DIR__ . '/includes/header.php';
             <?php endforeach; ?>
         </select>
 
-        <button type="submit" class="botao botao--secundario">Buscar</button>
+        <button type="button" id="botao-limpar-busca" class="botao botao--secundario">✕ Limpar</button>
     </form>
 </section>
 

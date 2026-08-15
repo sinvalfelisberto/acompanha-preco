@@ -360,57 +360,70 @@
     }
 })();
 
-/* ---------- Busca instantânea de produtos (jQuery) ---------- */
+/* ---------- Filtro instantâneo de produtos, no navegador (jQuery) ---------- */
 
 if (window.jQuery) {
     jQuery(function ($) {
         var $form = $('#form-busca');
         var $busca = $('#busca-input');
         var $categoria = $('#categoria-select');
-        var $resultados = $('#resultados-produtos');
+        var $resumo = $('#texto-resumo');
+        var $grade = $('#grade-produtos');
+        var $semResultados = $('#sem-resultados-filtro');
+        var $botaoLimpar = $('#botao-limpar-busca');
 
-        if (!$form.length || !$resultados.length) {
+        if (!$form.length || !$grade.length) {
             return;
         }
 
-        var temporizadorBusca = null;
+        var $cartoes = $grade.find('.cartao-produto');
 
-        function buscar() {
-            var parametros = {
-                ajax: 1,
-                busca: $busca.val(),
-                categoria: $categoria.val()
-            };
+        function aplicarFiltro() {
+            var termo = $.trim($busca.val()).toLowerCase();
+            var categoriaEscolhida = $categoria.val();
+            var visiveis = 0;
 
-            $resultados.attr('aria-busy', 'true');
+            $cartoes.each(function () {
+                var $cartao = $(this);
+                var bateNome = !termo
+                    || $cartao.data('nome').indexOf(termo) !== -1
+                    || $cartao.data('marca').indexOf(termo) !== -1;
+                var bateCategoria = !categoriaEscolhida || $cartao.data('categoria') === categoriaEscolhida;
+                var visivel = bateNome && bateCategoria;
 
-            $.get('index.php', parametros)
-                .done(function (html) {
-                    $resultados.html(html);
+                $cartao.toggle(visivel);
+                if (visivel) visiveis++;
+            });
 
-                    var urlParams = $.param({ busca: parametros.busca, categoria: parametros.categoria });
-                    var novaUrl = window.location.pathname + (urlParams ? '?' + urlParams : '');
-                    window.history.replaceState(null, '', novaUrl);
-                })
-                .always(function () {
-                    $resultados.removeAttr('aria-busy');
-                });
+            if ($resumo.length) {
+                $resumo.html(visiveis
+                    ? '<strong>' + visiveis + '</strong> produto' + (visiveis === 1 ? '' : 's') + ' encontrado' + (visiveis === 1 ? '' : 's')
+                    : 'Nenhum produto encontrado');
+            }
+
+            $grade.toggle(visiveis > 0);
+            if ($semResultados.length) $semResultados.prop('hidden', visiveis > 0);
+
+            var urlParams = $.param({ busca: $busca.val(), categoria: categoriaEscolhida });
+            var novaUrl = window.location.pathname + (urlParams ? '?' + urlParams : '');
+            window.history.replaceState(null, '', novaUrl);
         }
 
-        $busca.on('input', function () {
-            window.clearTimeout(temporizadorBusca);
-            temporizadorBusca = window.setTimeout(buscar, 300);
-        });
+        $busca.on('input', aplicarFiltro);
+        $categoria.on('change', aplicarFiltro);
 
-        $categoria.on('change', function () {
-            window.clearTimeout(temporizadorBusca);
-            buscar();
+        $botaoLimpar.on('click', function () {
+            $busca.val('');
+            $categoria.val('');
+            aplicarFiltro();
+            $busca.trigger('focus');
         });
 
         $form.on('submit', function (evento) {
             evento.preventDefault();
-            window.clearTimeout(temporizadorBusca);
-            buscar();
+            aplicarFiltro();
         });
+
+        aplicarFiltro();
     });
 }
