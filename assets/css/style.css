@@ -718,6 +718,58 @@ button {
     color: var(--cor-texto-suave);
 }
 
+.campo-localizacao {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: -4px;
+}
+
+.campo-localizacao .dica-campo {
+    margin: 0;
+    text-align: center;
+}
+
+.mapa-localizacao {
+    height: 280px;
+    border-radius: var(--raio);
+    overflow: hidden;
+    border: 1px solid var(--cor-borda);
+}
+
+.mapa-localizacao .leaflet-popup-content-wrapper,
+.mapa-localizacao .leaflet-popup-tip {
+    background: var(--cor-fundo-cartao);
+    color: var(--cor-texto);
+}
+
+.popup-mercado-mapa {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.popup-mercado-mapa strong {
+    font-size: 0.9rem;
+}
+
+.popup-mercado-mapa button {
+    border: none;
+    background: var(--cor-primaria);
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.marcador-mapa {
+    font-size: 1.4rem;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+}
+
 /* ---------- Alertas ---------- */
 
 .alerta {

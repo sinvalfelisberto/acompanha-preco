@@ -209,6 +209,27 @@ function criar_ou_obter_mercado(string $nome, ?string $endereco): int
     return (int) $pdo->lastInsertId();
 }
 
+function mercado_existe(string $nome): bool
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM mercados WHERE LOWER(nome) = LOWER(:nome)');
+    $stmt->execute(['nome' => $nome]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+function inserir_mercado(string $nome, ?string $endereco): int
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('INSERT INTO mercados (nome, endereco) VALUES (:nome, :endereco)');
+    $stmt->execute([
+        'nome' => $nome,
+        'endereco' => $endereco ?: null,
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
 function inserir_preco(int $produtoId, int $mercadoId, float $preco, string $data, ?string $observacao): void
 {
     $pdo = obter_conexao();

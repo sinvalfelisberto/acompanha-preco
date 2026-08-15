@@ -64,6 +64,191 @@
         });
     }
 
+    /* ---------- Mapa de localização com mercados próximos (Leaflet + OpenStreetMap) ---------- */
+
+    var botaoLocalizacao = document.getElementById('botao-localizacao');
+
+    if (botaoLocalizacao && typeof L !== 'undefined') {
+        var statusLocalizacao = document.getElementById('status-localizacao');
+        var campoDestino = document.getElementById(botaoLocalizacao.dataset.campoDestino);
+        var campoNome = document.getElementById(botaoLocalizacao.dataset.campoNome);
+        var containerMapa = document.getElementById('mapa-localizacao');
+        var dicaMapa = document.getElementById('dica-mapa');
+        var mapaLeaflet = null;
+        var marcadorSelecionado = null;
+
+        var definirStatus = function (texto) {
+            if (statusLocalizacao) statusLocalizacao.textContent = texto;
+        };
+
+        var preencherCampos = function (nome, endereco) {
+            if (endereco && campoDestino) campoDestino.value = endereco;
+            if (nome && campoNome) campoNome.value = nome;
+        };
+
+        var buscarEnderecoPorCoordenada = function (lat, lng, nomeConhecido) {
+            var url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat
+                + '&lon=' + lng + '&accept-language=pt-BR&namedetails=1&zoom=18';
+
+            definirStatus('🔎 Buscando endereço...');
+
+            fetch(url, { headers: { 'Accept': 'application/json' } })
+                .then(function (resposta) { return resposta.json(); })
+                .then(function (dados) {
+                    if (!dados || !dados.display_name) {
+                        definirStatus('Não foi possível encontrar o endereço dessa localização.');
+                        return;
+                    }
+
+                    var nomeEncontrado = nomeConhecido
+                        || dados.name
+                        || (dados.namedetails && dados.namedetails.name)
+                        || (dados.address && (dados.address.shop || dados.address.supermarket || dados.address.marketplace));
+
+                    preencherCampos(nomeEncontrado, dados.display_name);
+                    definirStatus(nomeEncontrado ? '✅ Nome e endereço preenchidos.' : '✅ Endereço preenchido. Preencha o nome manualmente.');
+                })
+                .catch(function () {
+                    definirStatus('Erro ao consultar o serviço de endereços. Tente novamente.');
+                });
+        };
+
+        var iconePin = function (emoji) {
+            return L.divIcon({
+                html: '<span class="marcador-mapa">' + emoji + '</span>',
+                className: '',
+                iconSize: [28, 28],
+                iconAnchor: [14, 26]
+            });
+        };
+
+        var moverMarcadorSelecionado = function (lat, lng) {
+            if (marcadorSelecionado) {
+                marcadorSelecionado.setLatLng([lat, lng]);
+            } else {
+                marcadorSelecionado = L.marker([lat, lng], { icon: iconePin('📍') }).addTo(mapaLeaflet);
+            }
+        };
+
+        var construirEnderecoDeTags = function (tags) {
+            var partes = [];
+            var rua = tags['addr:street'] || '';
+            if (rua && tags['addr:housenumber']) rua += ', ' + tags['addr:housenumber'];
+            if (rua) partes.push(rua);
+            if (tags['addr:suburb']) partes.push(tags['addr:suburb']);
+            if (tags['addr:city']) partes.push(tags['addr:city']);
+            if (tags['addr:postcode']) partes.push(tags['addr:postcode']);
+            return partes.length ? partes.join(', ') : null;
+        };
+
+        var carregarMercadosProximos = function (lat, lng) {
+            var consulta = '[out:json][timeout:15];('
+                + 'nwr["shop"~"supermarket|convenience|grocery|greengrocer|department_store"](around:400,' + lat + ',' + lng + ');'
+                + 'nwr["amenity"="marketplace"](around:400,' + lat + ',' + lng + ');'
+                + ');out center;';
+
+            fetch('https://overpass-api.de/api/interpreter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'data=' + encodeURIComponent(consulta)
+            })
+                .then(function (resposta) { return resposta.json(); })
+                .then(function (dados) {
+                    (dados.elements || []).forEach(function (elemento) {
+                        if (!elemento.tags || !elemento.tags.name) return;
+
+                        var pontoLat = elemento.lat || (elemento.center && elemento.center.lat);
+                        var pontoLng = elemento.lon || (elemento.center && elemento.center.lon);
+                        if (!pontoLat || !pontoLng) return;
+
+                        var enderecoTags = construirEnderecoDeTags(elemento.tags);
+                        var marcador = L.marker([pontoLat, pontoLng], { icon: iconePin('🏬') }).addTo(mapaLeaflet);
+
+                        var popupDiv = document.createElement('div');
+                        popupDiv.className = 'popup-mercado-mapa';
+
+                        var titulo = document.createElement('strong');
+                        titulo.textContent = elemento.tags.name;
+                        popupDiv.appendChild(titulo);
+
+                        var botao = document.createElement('button');
+                        botao.type = 'button';
+                        botao.textContent = 'Usar este mercado';
+                        botao.addEventListener('click', function () {
+                            if (enderecoTags) {
+                                preencherCampos(elemento.tags.name, enderecoTags);
+                                definirStatus('✅ Nome e endereço preenchidos a partir do mapa.');
+                            } else {
+                                buscarEnderecoPorCoordenada(pontoLat, pontoLng, elemento.tags.name);
+                            }
+                            mapaLeaflet.closePopup();
+                        });
+                        popupDiv.appendChild(botao);
+
+                        marcador.bindPopup(popupDiv);
+                    });
+                })
+                .catch(function () {
+                    /* falha silenciosa: usuário ainda pode tocar no mapa manualmente */
+                });
+        };
+
+        var abrirMapa = function (lat, lng) {
+            containerMapa.hidden = false;
+            dicaMapa.hidden = false;
+
+            if (!mapaLeaflet) {
+                mapaLeaflet = L.map(containerMapa).setView([lat, lng], 17);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© colaboradores do OpenStreetMap',
+                    maxZoom: 19
+                }).addTo(mapaLeaflet);
+
+                mapaLeaflet.on('click', function (evento) {
+                    moverMarcadorSelecionado(evento.latlng.lat, evento.latlng.lng);
+                    buscarEnderecoPorCoordenada(evento.latlng.lat, evento.latlng.lng);
+                });
+            } else {
+                mapaLeaflet.setView([lat, lng], 17);
+                mapaLeaflet.invalidateSize();
+            }
+
+            moverMarcadorSelecionado(lat, lng);
+            carregarMercadosProximos(lat, lng);
+        };
+
+        botaoLocalizacao.addEventListener('click', function () {
+            if (!navigator.geolocation) {
+                definirStatus('Seu navegador não suporta localização automática.');
+                return;
+            }
+
+            botaoLocalizacao.disabled = true;
+            definirStatus('📡 Obtendo sua localização...');
+
+            navigator.geolocation.getCurrentPosition(
+                function (posicao) {
+                    var lat = posicao.coords.latitude;
+                    var lng = posicao.coords.longitude;
+
+                    botaoLocalizacao.disabled = false;
+                    abrirMapa(lat, lng);
+                    buscarEnderecoPorCoordenada(lat, lng);
+                },
+                function (erro) {
+                    botaoLocalizacao.disabled = false;
+                    if (erro.code === erro.PERMISSION_DENIED) {
+                        definirStatus('Permissão de localização negada. Você pode digitar o endereço manualmente.');
+                    } else {
+                        definirStatus('Não foi possível obter sua localização. Tente novamente.');
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        });
+    }
+
     /* ---------- Máscara simples para o campo de preço ---------- */
 
     var campoPreco = document.getElementById('preco');

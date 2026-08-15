@@ -5,6 +5,7 @@ Aplicação web para acompanhar e comparar preços de produtos entre diferentes 
 Feita em PHP puro (sem framework), HTML e CSS, com visual moderno, responsivo (mobile e desktop) e temas claro/escuro.
 
 🔗 Em produção: https://felisberto.com.br/acompanha-preco/
+📦 Repositório: https://github.com/sinvalfelisberto/acompanha-preco
 
 ## Funcionalidades
 
@@ -12,8 +13,8 @@ Feita em PHP puro (sem framework), HTML e CSS, com visual moderno, responsivo (m
 - Busca por nome/marca e filtro por categoria
 - Comparação completa entre mercados para cada produto, com % de economia e histórico de preços
 - Cadastro de produto + preço + mercado, com autocomplete para evitar duplicidade
-- Listagem de mercados cadastrados
-- Login com Google (OAuth 2.0) — necessário para cadastrar preços
+- Listagem de mercados cadastrados, com formulário próprio para cadastrar um novo mercado (nome + endereço) e bloqueio de nomes duplicados
+- Login com Google (OAuth 2.0) — necessário para cadastrar preços e mercados
 - Tema claro/escuro (segue a preferência do sistema, com alternância manual salva no navegador)
 
 ## Stack
@@ -81,7 +82,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://localhost:8099/auth/callback.php
 ```
 
-Sem essas variáveis configuradas, o app funciona normalmente para visualizar preços — apenas o cadastro de novos preços fica bloqueado atrás do login.
+Sem essas variáveis configuradas, o app funciona normalmente para visualizar preços — apenas o cadastro de novos preços e mercados fica bloqueado atrás do login.
 
 ## Variáveis de ambiente
 
