@@ -503,6 +503,12 @@ button {
     max-width: 220px;
 }
 
+@media (max-width: 699px) {
+    #botao-limpar-busca {
+        margin-left: auto;
+    }
+}
+
 .secao-resumo {
     margin: 14px 0 6px;
 }
