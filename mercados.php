@@ -1,17 +1,30 @@
 <?php
 require_once __DIR__ . '/includes/auth.php';
 
+exigir_login();
+
 $erros = [];
 $sucesso = false;
+$editado = false;
+
+$mercadoEditando = null;
+if (!empty($_GET['editar'])) {
+    $mercadoEditando = obter_mercado((int) $_GET['editar']);
+}
 
 $valores = [
-    'nome' => '',
-    'endereco' => '',
+    'nome' => $mercadoEditando['nome'] ?? '',
+    'endereco' => $mercadoEditando['endereco'] ?? '',
 ];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    exigir_login();
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'excluir_mercado') {
+    excluir_mercado((int) ($_POST['mercado_id'] ?? 0));
 
+    header('Location: mercados.php?excluido=1');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'criar_mercado') {
     $valores['nome'] = trim($_POST['nome'] ?? '');
     $valores['endereco'] = trim($_POST['endereco'] ?? '');
 
@@ -27,6 +40,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $valores = ['nome' => '', 'endereco' => ''];
     }
 }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'editar_mercado') {
+    $mercadoId = (int) ($_POST['mercado_id'] ?? 0);
+    $mercadoEditando = obter_mercado($mercadoId);
+
+    $valores['nome'] = trim($_POST['nome'] ?? '');
+    $valores['endereco'] = trim($_POST['endereco'] ?? '');
+
+    if (!$mercadoEditando) {
+        $erros[] = 'Mercado não encontrado.';
+    } elseif ($valores['nome'] === '') {
+        $erros[] = 'Informe o nome do mercado.';
+    } elseif (mercado_existe($valores['nome'], $mercadoId)) {
+        $erros[] = 'Já existe outro mercado cadastrado com esse nome.';
+    }
+
+    if (!$erros) {
+        atualizar_mercado($mercadoId, $valores['nome'], $valores['endereco'] ?: null);
+        header('Location: mercados.php?editado=1');
+        exit;
+    }
+}
+
+$editado = !empty($_GET['editado']);
 
 $pdo = obter_conexao();
 $stmt = $pdo->query("
@@ -63,6 +100,24 @@ require __DIR__ . '/includes/header.php';
     </div>
 <?php endif; ?>
 
+<?php if (!empty($_GET['excluido'])): ?>
+    <div class="alerta alerta--sucesso" role="status">
+        <span aria-hidden="true">✅</span>
+        <div>
+            <strong>Mercado excluído com sucesso!</strong>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($editado): ?>
+    <div class="alerta alerta--sucesso" role="status">
+        <span aria-hidden="true">✅</span>
+        <div>
+            <strong>Mercado atualizado com sucesso!</strong>
+        </div>
+    </div>
+<?php endif; ?>
+
 <?php if ($erros): ?>
     <div class="alerta alerta--erro" role="alert">
         <span aria-hidden="true">⚠️</span>
@@ -77,10 +132,13 @@ require __DIR__ . '/includes/header.php';
     </div>
 <?php endif; ?>
 
-<?php if (usuario_logado()): ?>
-    <form method="post" class="form-cadastro">
+<form method="post" class="form-cadastro" id="form-cadastro">
+        <input type="hidden" name="acao" value="<?= $mercadoEditando ? 'editar_mercado' : 'criar_mercado' ?>">
+        <?php if ($mercadoEditando): ?>
+            <input type="hidden" name="mercado_id" value="<?= (int) $mercadoEditando['id'] ?>">
+        <?php endif; ?>
         <fieldset class="grupo-campos">
-            <legend>🏬 Novo mercado</legend>
+            <legend><?= $mercadoEditando ? '✏️ Editar mercado' : '🏬 Novo mercado' ?></legend>
 
             <label class="campo">
                 <span>Nome do mercado</span>
@@ -121,20 +179,14 @@ require __DIR__ . '/includes/header.php';
             </div>
 
             <button type="submit" class="botao botao--primario botao--bloco">
-                💾 Salvar mercado
+                <?= $mercadoEditando ? '💾 Salvar alterações' : '💾 Salvar mercado' ?>
             </button>
+
+            <?php if ($mercadoEditando): ?>
+                <a href="mercados.php" class="botao botao--secundario botao--bloco">Cancelar edição</a>
+            <?php endif; ?>
         </fieldset>
     </form>
-<?php else: ?>
-    <div class="alerta alerta--sucesso">
-        <span aria-hidden="true">🔐</span>
-        <div>
-            <strong>Quer cadastrar um novo mercado?</strong>
-            <p>Faça login para adicionar.</p>
-        </div>
-        <a href="login.php?redirecionar=%2Fmercados.php" class="botao botao--pequeno">Entrar com Google</a>
-    </div>
-<?php endif; ?>
 
 <?php if (!$mercados): ?>
     <div class="estado-vazio">
@@ -155,6 +207,22 @@ require __DIR__ . '/includes/header.php';
                     <?php if ($mercado['ultima_atualizacao']): ?>
                         <span>· Última consulta em <?= formatar_data($mercado['ultima_atualizacao']) ?></span>
                     <?php endif; ?>
+                </div>
+
+                <div class="cartao-mercado__acoes">
+                    <a href="mercados.php?editar=<?= (int) $mercado['id'] ?>#form-cadastro" class="botao-editar">✏️ Editar</a>
+
+                    <?php
+                        $totalPrecos = (int) $mercado['total_precos'];
+                        $avisoExclusao = $totalPrecos > 0
+                            ? "Excluir \"{$mercado['nome']}\"? Isso também vai apagar os {$totalPrecos} preço(s) registrados nele. Essa ação não pode ser desfeita."
+                            : "Excluir \"{$mercado['nome']}\"? Essa ação não pode ser desfeita.";
+                    ?>
+                    <form method="post" class="form-excluir" data-confirm="<?= htmlspecialchars($avisoExclusao) ?>">
+                        <input type="hidden" name="acao" value="excluir_mercado">
+                        <input type="hidden" name="mercado_id" value="<?= (int) $mercado['id'] ?>">
+                        <button type="submit" class="botao-excluir">🗑️ Excluir</button>
+                    </form>
                 </div>
             </article>
         <?php endforeach; ?>

@@ -7,8 +7,13 @@ $erros = [];
 $sucesso = false;
 $produtoSalvoId = null;
 
+$precoEditando = null;
+if (!empty($_GET['preco_id'])) {
+    $precoEditando = obter_preco((int) $_GET['preco_id']);
+}
+
 $produtoPreSelecionado = null;
-if (!empty($_GET['produto_id'])) {
+if (!$precoEditando && !empty($_GET['produto_id'])) {
     $produtoPreSelecionado = obter_produto((int) $_GET['produto_id']);
 }
 
@@ -17,20 +22,59 @@ $valores = [
     'marca' => $produtoPreSelecionado['marca'] ?? '',
     'categoria' => $produtoPreSelecionado['categoria'] ?? '',
     'unidade' => $produtoPreSelecionado['unidade'] ?? 'un',
-    'mercado_nome' => '',
-    'endereco' => '',
-    'preco' => '',
-    'data_registro' => date('Y-m-d'),
-    'observacao' => '',
+    'mercado_id' => $precoEditando['mercado_id'] ?? '',
+    'preco' => $precoEditando ? number_format((float) $precoEditando['preco'], 2, ',', '') : '',
+    'data_registro' => $precoEditando['data_registro'] ?? date('Y-m-d'),
+    'observacao' => $precoEditando['observacao'] ?? '',
 ];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'editar_preco') {
+    $precoId = (int) ($_POST['preco_id'] ?? 0);
+    $precoEditando = obter_preco($precoId);
+
+    $valores['mercado_id'] = trim($_POST['mercado_id'] ?? '');
+    $valores['preco'] = trim($_POST['preco'] ?? '');
+    $valores['data_registro'] = trim($_POST['data_registro'] ?? date('Y-m-d'));
+    $valores['observacao'] = trim($_POST['observacao'] ?? '');
+
+    if (!$precoEditando) {
+        $erros[] = 'Preço não encontrado.';
+    }
+
+    $mercadoSelecionado = $valores['mercado_id'] !== '' ? obter_mercado((int) $valores['mercado_id']) : null;
+    if (!$mercadoSelecionado) {
+        $erros[] = 'Selecione um mercado.';
+    }
+
+    $precoNormalizado = str_replace(',', '.', $valores['preco']);
+    if ($valores['preco'] === '' || !is_numeric($precoNormalizado) || (float) $precoNormalizado <= 0) {
+        $erros[] = 'Informe um preço válido, maior que zero.';
+    }
+
+    if (!$erros) {
+        try {
+            atualizar_preco(
+                $precoId,
+                (int) $valores['mercado_id'],
+                (float) $precoNormalizado,
+                $valores['data_registro'],
+                $valores['observacao'] ?: null
+            );
+
+            header('Location: produto.php?id=' . $precoEditando['produto_id'] . '&editado=1');
+            exit;
+        } catch (PDOException $e) {
+            $erros[] = 'Já existe um preço igual registrado para esse mercado e essa data.';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'criar_preco') {
     $valores['produto_nome'] = trim($_POST['produto_nome'] ?? '');
     $valores['marca'] = trim($_POST['marca'] ?? '');
     $valores['categoria'] = trim($_POST['categoria'] ?? '');
     $valores['unidade'] = trim($_POST['unidade'] ?? 'un');
-    $valores['mercado_nome'] = trim($_POST['mercado_nome'] ?? '');
-    $valores['endereco'] = trim($_POST['endereco'] ?? '');
+    $valores['mercado_id'] = trim($_POST['mercado_id'] ?? '');
     $valores['preco'] = trim($_POST['preco'] ?? '');
     $valores['data_registro'] = trim($_POST['data_registro'] ?? date('Y-m-d'));
     $valores['observacao'] = trim($_POST['observacao'] ?? '');
@@ -39,8 +83,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erros[] = 'Informe o nome do produto.';
     }
 
-    if ($valores['mercado_nome'] === '') {
-        $erros[] = 'Informe o mercado onde o preço foi consultado.';
+    if ($valores['categoria'] === '' || !in_array($valores['categoria'], listar_categorias(), true)) {
+        $erros[] = 'Selecione uma categoria.';
+    }
+
+    $mercadoSelecionado = $valores['mercado_id'] !== '' ? obter_mercado((int) $valores['mercado_id']) : null;
+    if (!$mercadoSelecionado) {
+        $erros[] = 'Selecione um mercado.';
     }
 
     $precoNormalizado = str_replace(',', '.', $valores['preco']);
@@ -52,18 +101,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $produtoId = criar_ou_obter_produto(
             $valores['produto_nome'],
             $valores['marca'] ?: null,
-            $valores['categoria'] ?: null,
+            $valores['categoria'],
             $valores['unidade'] ?: 'un'
-        );
-
-        $mercadoId = criar_ou_obter_mercado(
-            $valores['mercado_nome'],
-            $valores['endereco'] ?: null
         );
 
         inserir_preco(
             $produtoId,
-            $mercadoId,
+            (int) $valores['mercado_id'],
             (float) $precoNormalizado,
             $valores['data_registro'],
             $valores['observacao'] ?: null
@@ -77,8 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'marca' => '',
             'categoria' => '',
             'unidade' => 'un',
-            'mercado_nome' => '',
-            'endereco' => '',
+            'mercado_id' => '',
             'preco' => '',
             'data_registro' => date('Y-m-d'),
             'observacao' => '',
@@ -90,14 +133,18 @@ $produtosExistentes = listar_produtos();
 $mercadosExistentes = listar_mercados();
 $categorias = listar_categorias();
 
-$tituloPagina = 'Adicionar preço';
+$tituloPagina = $precoEditando ? 'Editar preço' : 'Adicionar preço';
 $paginaAtiva = 'adicionar';
 require __DIR__ . '/includes/header.php';
 ?>
 
 <section class="cabecalho-secao">
-    <h1>➕ Adicionar preço</h1>
-    <p class="subtitulo">Cadastre um produto e o preço encontrado em um mercado para comparar depois.</p>
+    <h1><?= $precoEditando ? '✏️ Editar preço' : '➕ Adicionar preço' ?></h1>
+    <p class="subtitulo">
+        <?= $precoEditando
+            ? 'Atualize o preço, o mercado, a data ou a observação deste registro.'
+            : 'Cadastre um produto e o preço encontrado em um mercado para comparar depois.' ?>
+    </p>
 </section>
 
 <?php if ($sucesso): ?>
@@ -128,83 +175,95 @@ require __DIR__ . '/includes/header.php';
 <?php endif; ?>
 
 <form method="post" class="form-cadastro" id="form-cadastro" novalidate>
-    <fieldset class="grupo-campos">
-        <legend>🛒 Produto</legend>
+    <input type="hidden" name="acao" value="<?= $precoEditando ? 'editar_preco' : 'criar_preco' ?>">
+    <?php if ($precoEditando): ?>
+        <input type="hidden" name="preco_id" value="<?= (int) $precoEditando['id'] ?>">
+    <?php endif; ?>
 
-        <label class="campo">
-            <span>Nome do produto</span>
-            <input
-                type="text"
-                name="produto_nome"
-                id="produto_nome"
-                list="lista-produtos"
-                placeholder="Ex: Arroz branco 5kg"
-                value="<?= htmlspecialchars($valores['produto_nome']) ?>"
-                required
-            >
-        </label>
-        <datalist id="lista-produtos">
-            <?php foreach ($produtosExistentes as $p): ?>
-                <option value="<?= htmlspecialchars($p['nome']) ?>"></option>
-            <?php endforeach; ?>
-        </datalist>
-        <p class="dica-campo">Se o produto já existir, escolha da lista para manter tudo organizado.</p>
-
-        <div class="campo-linha">
-            <label class="campo">
-                <span>Marca (opcional)</span>
-                <input type="text" name="marca" id="marca" placeholder="Ex: Tio João"
-                       value="<?= htmlspecialchars($valores['marca']) ?>">
-            </label>
+    <?php if ($precoEditando): ?>
+        <fieldset class="grupo-campos">
+            <legend>🛒 Produto</legend>
+            <p class="dica-campo">Editando preço de <strong><?= htmlspecialchars($precoEditando['produto_nome']) ?></strong>. Para alterar o produto, exclua este preço e cadastre um novo.</p>
+        </fieldset>
+    <?php else: ?>
+        <fieldset class="grupo-campos">
+            <legend>🛒 Produto</legend>
 
             <label class="campo">
-                <span>Categoria (opcional)</span>
-                <input type="text" name="categoria" id="categoria" list="lista-categorias" placeholder="Ex: Mercearia"
-                       value="<?= htmlspecialchars($valores['categoria']) ?>">
-                <datalist id="lista-categorias">
-                    <?php foreach ($categorias as $cat): ?>
-                        <option value="<?= htmlspecialchars($cat) ?>"></option>
-                    <?php endforeach; ?>
-                </datalist>
+                <span>Nome do produto</span>
+                <input
+                    type="text"
+                    name="produto_nome"
+                    id="produto_nome"
+                    list="lista-produtos"
+                    placeholder="Ex: Arroz branco 5kg"
+                    value="<?= htmlspecialchars($valores['produto_nome']) ?>"
+                    required
+                >
             </label>
-        </div>
-
-        <label class="campo">
-            <span>Unidade</span>
-            <select name="unidade" id="unidade">
-                <?php foreach (['un' => 'Unidade (un)', 'kg' => 'Quilo (kg)', 'g' => 'Grama (g)', 'L' => 'Litro (L)', 'ml' => 'Mililitro (ml)', 'dz' => 'Dúzia (dz)', 'pct' => 'Pacote (pct)'] as $valor => $rotulo): ?>
-                    <option value="<?= $valor ?>" <?= $valores['unidade'] === $valor ? 'selected' : '' ?>><?= $rotulo ?></option>
+            <datalist id="lista-produtos">
+                <?php foreach ($produtosExistentes as $p): ?>
+                    <option value="<?= htmlspecialchars($p['nome']) ?>"></option>
                 <?php endforeach; ?>
-            </select>
-        </label>
-    </fieldset>
+            </datalist>
+            <p class="dica-campo">Se o produto já existir, escolha da lista para manter tudo organizado.</p>
+
+            <div class="campo-linha">
+                <label class="campo">
+                    <span>Marca (opcional)</span>
+                    <input type="text" name="marca" id="marca" placeholder="Ex: Tio João"
+                           value="<?= htmlspecialchars($valores['marca']) ?>">
+                </label>
+
+                <label class="campo">
+                    <span>Categoria</span>
+                    <select name="categoria" id="categoria" required <?= !$categorias ? 'disabled' : '' ?>>
+                        <option value="">Selecione uma categoria</option>
+                        <?php foreach ($categorias as $cat): ?>
+                            <option value="<?= htmlspecialchars($cat) ?>" <?= $valores['categoria'] === $cat ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($cat) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (!$categorias): ?>
+                        <p class="dica-campo">Nenhuma categoria cadastrada ainda. <a href="categorias.php">Cadastre uma categoria primeiro</a>.</p>
+                    <?php else: ?>
+                        <p class="dica-campo">Não encontrou a categoria? <a href="categorias.php">Cadastre uma nova</a>.</p>
+                    <?php endif; ?>
+                </label>
+            </div>
+
+            <label class="campo">
+                <span>Unidade</span>
+                <select name="unidade" id="unidade">
+                    <?php foreach (['un' => 'Unidade (un)', 'kg' => 'Quilo (kg)', 'g' => 'Grama (g)', 'L' => 'Litro (L)', 'ml' => 'Mililitro (ml)', 'dz' => 'Dúzia (dz)', 'pct' => 'Pacote (pct)'] as $valor => $rotulo): ?>
+                        <option value="<?= $valor ?>" <?= $valores['unidade'] === $valor ? 'selected' : '' ?>><?= $rotulo ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+        </fieldset>
+    <?php endif; ?>
 
     <fieldset class="grupo-campos">
         <legend>🏬 Mercado</legend>
 
         <label class="campo">
-            <span>Nome do mercado</span>
-            <input
-                type="text"
-                name="mercado_nome"
-                id="mercado_nome"
-                list="lista-mercados"
-                placeholder="Ex: Supermercado Bom Preço"
-                value="<?= htmlspecialchars($valores['mercado_nome']) ?>"
-                required
-            >
+            <span>Mercado</span>
+            <select name="mercado_id" id="mercado_id" required <?= !$mercadosExistentes ? 'disabled' : '' ?>>
+                <option value="">Selecione um mercado</option>
+                <?php foreach ($mercadosExistentes as $m): ?>
+                    <option value="<?= (int) $m['id'] ?>" <?= (string) $valores['mercado_id'] === (string) $m['id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($m['nome']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
         </label>
-        <datalist id="lista-mercados">
-            <?php foreach ($mercadosExistentes as $m): ?>
-                <option value="<?= htmlspecialchars($m['nome']) ?>"></option>
-            <?php endforeach; ?>
-        </datalist>
 
-        <label class="campo">
-            <span>Endereço (opcional)</span>
-            <input type="text" name="endereco" id="endereco" placeholder="Ex: Av. Principal, 123"
-                   value="<?= htmlspecialchars($valores['endereco']) ?>">
-        </label>
+        <?php if (!$mercadosExistentes): ?>
+            <p class="dica-campo">Nenhum mercado cadastrado ainda. <a href="mercados.php">Cadastre um mercado primeiro</a>.</p>
+        <?php else: ?>
+            <p class="dica-campo">Não encontrou o mercado? <a href="mercados.php">Cadastre um novo</a>.</p>
+        <?php endif; ?>
     </fieldset>
 
     <fieldset class="grupo-campos">
@@ -241,9 +300,13 @@ require __DIR__ . '/includes/header.php';
         </label>
     </fieldset>
 
-    <button type="submit" class="botao botao--primario botao--bloco botao--grande">
-        💾 Salvar preço
+    <button type="submit" class="botao botao--primario botao--bloco botao--grande" <?= !$mercadosExistentes ? 'disabled' : '' ?>>
+        <?= $precoEditando ? '💾 Salvar alterações' : '💾 Salvar preço' ?>
     </button>
+
+    <?php if ($precoEditando): ?>
+        <a href="produto.php?id=<?= (int) $precoEditando['produto_id'] ?>" class="botao botao--secundario botao--bloco">Cancelar edição</a>
+    <?php endif; ?>
 </form>
 
 <script id="dados-produtos" type="application/json"><?= json_encode($produtosExistentes, JSON_UNESCAPED_UNICODE) ?></script>

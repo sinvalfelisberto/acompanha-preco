@@ -5,6 +5,8 @@
 
     var raiz = document.documentElement;
     var botaoTema = document.getElementById('botao-tema');
+    var iconeTema = document.getElementById('botao-tema-icone');
+    var textoTema = document.getElementById('botao-tema-texto');
 
     function temaAtual() {
         return raiz.getAttribute('data-tema') === 'escuro' ? 'escuro' : 'claro';
@@ -12,9 +14,9 @@
 
     function atualizarIconeTema() {
         if (!botaoTema) return;
-        var icone = botaoTema.querySelector('.botao-tema__icone');
         var escuro = temaAtual() === 'escuro';
-        icone.textContent = escuro ? '☀️' : '🌙';
+        if (iconeTema) iconeTema.textContent = escuro ? '☀️' : '🌙';
+        if (textoTema) textoTema.textContent = escuro ? 'Tema claro' : 'Tema escuro';
         botaoTema.setAttribute('aria-label', escuro ? 'Mudar para tema claro' : 'Mudar para tema escuro');
     }
 
@@ -30,6 +32,100 @@
             raiz.setAttribute('data-tema', novoTema);
             localStorage.setItem('tema', novoTema);
             atualizarIconeTema();
+        });
+    }
+
+    /* ---------- Saudação (calculada no dispositivo do usuário) ---------- */
+
+    var saudacaoTexto = document.getElementById('saudacao-texto');
+    if (saudacaoTexto) {
+        var horaLocal = new Date().getHours();
+        var saudacao = horaLocal < 12 ? 'Bom dia,' : (horaLocal < 18 ? 'Boa tarde,' : 'Boa noite,');
+        saudacaoTexto.textContent = saudacao;
+    }
+
+    /* ---------- Menu hambúrguer (painel lateral) ---------- */
+
+    var botaoMenu = document.getElementById('botao-menu');
+    var menuLateral = document.getElementById('menu-lateral');
+    var menuOverlay = document.getElementById('menu-overlay');
+    var botaoFecharMenu = document.getElementById('botao-fechar-menu');
+
+    if (botaoMenu && menuLateral && menuOverlay) {
+        var abrirMenu = function () {
+            menuLateral.classList.add('aberto');
+            menuOverlay.classList.add('aberto');
+            menuLateral.setAttribute('aria-hidden', 'false');
+            botaoMenu.setAttribute('aria-expanded', 'true');
+            if (botaoFecharMenu) botaoFecharMenu.focus();
+            document.body.style.overflow = 'hidden';
+        };
+
+        var fecharMenu = function () {
+            menuLateral.classList.remove('aberto');
+            menuOverlay.classList.remove('aberto');
+            menuLateral.setAttribute('aria-hidden', 'true');
+            botaoMenu.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+            botaoMenu.focus();
+        };
+
+        botaoMenu.addEventListener('click', abrirMenu);
+        if (botaoFecharMenu) botaoFecharMenu.addEventListener('click', fecharMenu);
+        menuOverlay.addEventListener('click', fecharMenu);
+
+        document.addEventListener('keydown', function (evento) {
+            if (evento.key === 'Escape' && menuLateral.classList.contains('aberto')) {
+                fecharMenu();
+            }
+        });
+    }
+
+    /* ---------- Modal de confirmação para exclusão de preços e mercados ---------- */
+
+    var modalOverlay = document.getElementById('modal-confirmacao');
+    var formsExcluir = document.querySelectorAll('.form-excluir[data-confirm]');
+
+    if (modalOverlay && formsExcluir.length) {
+        var modalMensagem = document.getElementById('modal-mensagem');
+        var modalCancelar = document.getElementById('modal-cancelar');
+        var modalConfirmar = document.getElementById('modal-confirmar');
+        var formPendente = null;
+
+        var fecharModal = function () {
+            modalOverlay.hidden = true;
+            formPendente = null;
+        };
+
+        var abrirModal = function (form) {
+            formPendente = form;
+            modalMensagem.textContent = form.dataset.confirm;
+            modalOverlay.hidden = false;
+            modalConfirmar.focus();
+        };
+
+        formsExcluir.forEach(function (form) {
+            form.addEventListener('submit', function (evento) {
+                evento.preventDefault();
+                abrirModal(form);
+            });
+        });
+
+        modalCancelar.addEventListener('click', fecharModal);
+
+        modalConfirmar.addEventListener('click', function () {
+            var form = formPendente;
+            modalOverlay.hidden = true;
+            formPendente = null;
+            if (form) form.submit();
+        });
+
+        modalOverlay.addEventListener('click', function (evento) {
+            if (evento.target === modalOverlay) fecharModal();
+        });
+
+        document.addEventListener('keydown', function (evento) {
+            if (evento.key === 'Escape' && !modalOverlay.hidden) fecharModal();
         });
     }
 
@@ -263,3 +359,58 @@
         });
     }
 })();
+
+/* ---------- Busca instantânea de produtos (jQuery) ---------- */
+
+if (window.jQuery) {
+    jQuery(function ($) {
+        var $form = $('#form-busca');
+        var $busca = $('#busca-input');
+        var $categoria = $('#categoria-select');
+        var $resultados = $('#resultados-produtos');
+
+        if (!$form.length || !$resultados.length) {
+            return;
+        }
+
+        var temporizadorBusca = null;
+
+        function buscar() {
+            var parametros = {
+                ajax: 1,
+                busca: $busca.val(),
+                categoria: $categoria.val()
+            };
+
+            $resultados.attr('aria-busy', 'true');
+
+            $.get('index.php', parametros)
+                .done(function (html) {
+                    $resultados.html(html);
+
+                    var urlParams = $.param({ busca: parametros.busca, categoria: parametros.categoria });
+                    var novaUrl = window.location.pathname + (urlParams ? '?' + urlParams : '');
+                    window.history.replaceState(null, '', novaUrl);
+                })
+                .always(function () {
+                    $resultados.removeAttr('aria-busy');
+                });
+        }
+
+        $busca.on('input', function () {
+            window.clearTimeout(temporizadorBusca);
+            temporizadorBusca = window.setTimeout(buscar, 300);
+        });
+
+        $categoria.on('change', function () {
+            window.clearTimeout(temporizadorBusca);
+            buscar();
+        });
+
+        $form.on('submit', function (evento) {
+            evento.preventDefault();
+            window.clearTimeout(temporizadorBusca);
+            buscar();
+        });
+    });
+}

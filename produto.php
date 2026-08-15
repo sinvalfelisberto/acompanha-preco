@@ -1,11 +1,20 @@
 <?php
-require_once __DIR__ . '/includes/functions.php';
+require_once __DIR__ . '/includes/auth.php';
+
+exigir_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 $produto = obter_produto($id);
 
 if (!$produto) {
     header('Location: index.php');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'excluir_preco') {
+    excluir_preco((int) ($_POST['preco_id'] ?? 0));
+
+    header('Location: produto.php?id=' . $id . '&excluido=1');
     exit;
 }
 
@@ -24,6 +33,24 @@ require __DIR__ . '/includes/header.php';
 ?>
 
 <a href="index.php" class="link-voltar">← Voltar para a lista</a>
+
+<?php if (!empty($_GET['excluido'])): ?>
+    <div class="alerta alerta--sucesso" role="status">
+        <span aria-hidden="true">✅</span>
+        <div>
+            <strong>Preço excluído com sucesso!</strong>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($_GET['editado'])): ?>
+    <div class="alerta alerta--sucesso" role="status">
+        <span aria-hidden="true">✅</span>
+        <div>
+            <strong>Preço atualizado com sucesso!</strong>
+        </div>
+    </div>
+<?php endif; ?>
 
 <section class="cabecalho-produto">
     <h1><?= htmlspecialchars($produto['nome']) ?></h1>
@@ -69,6 +96,16 @@ require __DIR__ . '/includes/header.php';
                     <div class="item-comparacao__preco">
                         <?= formatar_preco((float) $item['preco']) ?>
                     </div>
+                    <?php if (usuario_logado()): ?>
+                        <div class="item-comparacao__acoes">
+                            <a href="adicionar.php?preco_id=<?= (int) $item['id'] ?>" class="botao-editar" aria-label="Editar este preço">✏️</a>
+                            <form method="post" class="form-excluir" data-confirm="Excluir esse preço de <?= htmlspecialchars($item['mercado_nome']) ?>?">
+                                <input type="hidden" name="acao" value="excluir_preco">
+                                <input type="hidden" name="preco_id" value="<?= (int) $item['id'] ?>">
+                                <button type="submit" class="botao-excluir" aria-label="Excluir este preço">🗑️</button>
+                            </form>
+                        </div>
+                    <?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ul>
@@ -85,6 +122,7 @@ require __DIR__ . '/includes/header.php';
                         <th>Data</th>
                         <th>Mercado</th>
                         <th>Preço</th>
+                        <?php if (usuario_logado()): ?><th></th><?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -93,6 +131,18 @@ require __DIR__ . '/includes/header.php';
                             <td><?= formatar_data($registro['data_registro']) ?></td>
                             <td><?= htmlspecialchars($registro['mercado_nome']) ?></td>
                             <td><?= formatar_preco((float) $registro['preco']) ?></td>
+                            <?php if (usuario_logado()): ?>
+                                <td>
+                                    <div class="item-comparacao__acoes">
+                                        <a href="adicionar.php?preco_id=<?= (int) $registro['id'] ?>" class="botao-editar" aria-label="Editar este preço">✏️</a>
+                                        <form method="post" class="form-excluir" data-confirm="Excluir esse preço de <?= htmlspecialchars($registro['mercado_nome']) ?>?">
+                                            <input type="hidden" name="acao" value="excluir_preco">
+                                            <input type="hidden" name="preco_id" value="<?= (int) $registro['id'] ?>">
+                                            <button type="submit" class="botao-excluir" aria-label="Excluir este preço">🗑️</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            <?php endif; ?>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

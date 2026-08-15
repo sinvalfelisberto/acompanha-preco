@@ -53,8 +53,9 @@ function listar_produtos(?string $busca = null, ?string $categoria = null): arra
     $parametros = [];
 
     if ($busca !== null && $busca !== '') {
-        $sql .= " AND (p.nome LIKE :busca OR p.marca LIKE :busca) ";
-        $parametros['busca'] = '%' . $busca . '%';
+        $sql .= " AND (p.nome LIKE :busca_nome OR p.marca LIKE :busca_marca) ";
+        $parametros['busca_nome'] = '%' . $busca . '%';
+        $parametros['busca_marca'] = '%' . $busca . '%';
     }
 
     if ($categoria !== null && $categoria !== '') {
@@ -73,14 +74,89 @@ function listar_produtos(?string $busca = null, ?string $categoria = null): arra
 function listar_categorias(): array
 {
     $pdo = obter_conexao();
-    $stmt = $pdo->query("
-        SELECT DISTINCT categoria
-        FROM produtos
-        WHERE categoria IS NOT NULL AND categoria <> ''
-        ORDER BY categoria ASC
-    ");
+    $stmt = $pdo->query('SELECT nome FROM categorias ORDER BY nome ASC');
 
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+/**
+ * Lista categorias com a quantidade de produtos que as usam atualmente.
+ */
+function listar_categorias_com_uso(): array
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->query('
+        SELECT c.id, c.nome, COUNT(p.id) AS total_produtos
+        FROM categorias c
+        LEFT JOIN produtos p ON p.categoria = c.nome
+        GROUP BY c.id, c.nome
+        ORDER BY c.nome ASC
+    ');
+
+    return $stmt->fetchAll();
+}
+
+function obter_categoria(int $id): ?array
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('SELECT * FROM categorias WHERE id = :id');
+    $stmt->execute(['id' => $id]);
+    $categoria = $stmt->fetch();
+
+    return $categoria ?: null;
+}
+
+function categoria_existe(string $nome, ?int $exceto_id = null): bool
+{
+    $pdo = obter_conexao();
+    $sql = 'SELECT COUNT(*) FROM categorias WHERE LOWER(nome) = LOWER(:nome)';
+    $parametros = ['nome' => $nome];
+
+    if ($exceto_id !== null) {
+        $sql .= ' AND id <> :exceto_id';
+        $parametros['exceto_id'] = $exceto_id;
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($parametros);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+function inserir_categoria(string $nome): int
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('INSERT INTO categorias (nome) VALUES (:nome)');
+    $stmt->execute(['nome' => $nome]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function atualizar_categoria(int $id, string $nomeNovo): void
+{
+    $pdo = obter_conexao();
+    $categoria = obter_categoria($id);
+
+    if (!$categoria) {
+        return;
+    }
+
+    $pdo->beginTransaction();
+
+    $stmt = $pdo->prepare('UPDATE categorias SET nome = :nome WHERE id = :id');
+    $stmt->execute(['id' => $id, 'nome' => $nomeNovo]);
+
+    $stmt = $pdo->prepare('UPDATE produtos SET categoria = :nome_novo WHERE categoria = :nome_antigo');
+    $stmt->execute(['nome_novo' => $nomeNovo, 'nome_antigo' => $categoria['nome']]);
+
+    $pdo->commit();
+}
+
+function excluir_categoria(int $id): void
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('DELETE FROM categorias WHERE id = :id');
+    $stmt->execute(['id' => $id]);
 }
 
 function obter_produto(int $id): ?array
@@ -100,7 +176,7 @@ function obter_precos_produto(int $produtoId): array
 {
     $pdo = obter_conexao();
     $stmt = $pdo->prepare("
-        SELECT pr.mercado_id, m.nome AS mercado_nome, m.endereco, pr.preco, pr.data_registro, pr.observacao
+        SELECT pr.id, pr.mercado_id, m.nome AS mercado_nome, m.endereco, pr.preco, pr.data_registro, pr.observacao
         FROM precos pr
         INNER JOIN mercados m ON m.id = pr.mercado_id
         WHERE pr.produto_id = :produto_id
@@ -209,13 +285,42 @@ function criar_ou_obter_mercado(string $nome, ?string $endereco): int
     return (int) $pdo->lastInsertId();
 }
 
-function mercado_existe(string $nome): bool
+function mercado_existe(string $nome, ?int $exceto_id = null): bool
 {
     $pdo = obter_conexao();
-    $stmt = $pdo->prepare('SELECT COUNT(*) FROM mercados WHERE LOWER(nome) = LOWER(:nome)');
-    $stmt->execute(['nome' => $nome]);
+    $sql = 'SELECT COUNT(*) FROM mercados WHERE LOWER(nome) = LOWER(:nome)';
+    $parametros = ['nome' => $nome];
+
+    if ($exceto_id !== null) {
+        $sql .= ' AND id <> :exceto_id';
+        $parametros['exceto_id'] = $exceto_id;
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($parametros);
 
     return (bool) $stmt->fetchColumn();
+}
+
+function obter_mercado(int $id): ?array
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('SELECT * FROM mercados WHERE id = :id');
+    $stmt->execute(['id' => $id]);
+    $mercado = $stmt->fetch();
+
+    return $mercado ?: null;
+}
+
+function atualizar_mercado(int $id, string $nome, ?string $endereco): void
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('UPDATE mercados SET nome = :nome, endereco = :endereco WHERE id = :id');
+    $stmt->execute([
+        'id' => $id,
+        'nome' => $nome,
+        'endereco' => $endereco ?: null,
+    ]);
 }
 
 function inserir_mercado(string $nome, ?string $endereco): int
@@ -245,6 +350,53 @@ function inserir_preco(int $produtoId, int $mercadoId, float $preco, string $dat
         'data_registro' => $data,
         'observacao' => $observacao ?: null,
     ]);
+}
+
+function obter_preco(int $id): ?array
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('
+        SELECT pr.*, p.nome AS produto_nome, m.nome AS mercado_nome
+        FROM precos pr
+        INNER JOIN produtos p ON p.id = pr.produto_id
+        INNER JOIN mercados m ON m.id = pr.mercado_id
+        WHERE pr.id = :id
+    ');
+    $stmt->execute(['id' => $id]);
+    $preco = $stmt->fetch();
+
+    return $preco ?: null;
+}
+
+function atualizar_preco(int $id, int $mercadoId, float $preco, string $data, ?string $observacao): void
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('
+        UPDATE precos
+        SET mercado_id = :mercado_id, preco = :preco, data_registro = :data_registro, observacao = :observacao
+        WHERE id = :id
+    ');
+    $stmt->execute([
+        'id' => $id,
+        'mercado_id' => $mercadoId,
+        'preco' => $preco,
+        'data_registro' => $data,
+        'observacao' => $observacao ?: null,
+    ]);
+}
+
+function excluir_preco(int $id): void
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('DELETE FROM precos WHERE id = :id');
+    $stmt->execute(['id' => $id]);
+}
+
+function excluir_mercado(int $id): void
+{
+    $pdo = obter_conexao();
+    $stmt = $pdo->prepare('DELETE FROM mercados WHERE id = :id');
+    $stmt->execute(['id' => $id]);
 }
 
 function criar_ou_atualizar_usuario(string $googleId, string $nome, string $email, ?string $avatarUrl): int
