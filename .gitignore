@@ -17,3 +17,6 @@ Thumbs.db
 # Cache / temporários
 *.cache
 *.tmp
+
+# pastaCarga
+carga/

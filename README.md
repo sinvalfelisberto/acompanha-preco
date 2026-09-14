@@ -9,19 +9,19 @@ Feita em PHP puro (sem framework), HTML e CSS, com visual moderno, responsivo (m
 
 ## Funcionalidades
 
+- **Login com Google (OAuth 2.0) obrigatório** — todas as páginas exigem login para visualizar, não só para cadastrar
 - Listagem de produtos com o menor preço em destaque e o mercado correspondente
-- Busca por nome/marca e filtro por categoria
+- Busca instantânea por nome/marca e filtro por categoria, direto no navegador (sem recarregar a página a cada letra digitada)
 - Comparação completa entre mercados para cada produto, com % de economia e histórico de preços
-- Cadastro de produto + preço + mercado, com autocomplete para evitar duplicidade
-- Listagem de mercados cadastrados, com formulário próprio para cadastrar um novo mercado (nome + endereço) e bloqueio de nomes duplicados
+- Cadastro, edição e exclusão de preços, mercados e categorias — com autocomplete/dropdown para evitar duplicidade e modal de confirmação antes de excluir
 - Preenchimento automático de nome e endereço do mercado a partir da localização do dispositivo, com mapa interativo mostrando os mercados próximos para selecionar (OpenStreetMap/Nominatim/Overpass — gratuito, sem chave de API)
-- Login com Google (OAuth 2.0) — necessário para cadastrar preços e mercados
+- Menu lateral (hambúrguer) com foto, saudação e nome do usuário, atalhos para incluir produto/mercado/categoria, alternância de tema e logout
 - Tema claro/escuro (segue a preferência do sistema, com alternância manual salva no navegador)
 
 ## Stack
 
 - PHP 8+ com PDO (MySQL/MariaDB)
-- HTML, CSS e JavaScript puros (sem build step)
+- HTML, CSS e JavaScript puros (sem build step), com [jQuery](https://jquery.com/) para a busca instantânea
 - [league/oauth2-google](https://github.com/thephpleague/oauth2-google) para o login com Google
 - [Leaflet](https://leafletjs.com/) + tiles do OpenStreetMap para o mapa interativo de mercados
 - [Nominatim](https://nominatim.org/) (geocodificação reversa) e [Overpass API](https://overpass-api.de/) (busca de mercados próximos) — ambos gratuitos e sem necessidade de chave de API
@@ -30,6 +30,7 @@ Feita em PHP puro (sem framework), HTML e CSS, com visual moderno, responsivo (m
 
 - `produtos` — nome, marca, categoria, unidade
 - `mercados` — nome, endereço
+- `categorias` — nome (usadas para organizar os produtos)
 - `precos` — preço, data da consulta, ligado a um produto e a um mercado
 - `usuarios` — dados de quem faz login com Google (google_id, nome, email, avatar)
 
@@ -60,7 +61,7 @@ DB_USER=usuario
 DB_PASS=senha
 ```
 
-Crie as tabelas `produtos`, `mercados`, `precos` e `usuarios` no banco (veja a estrutura em [Estrutura do banco](#estrutura-do-banco)).
+Crie as tabelas `produtos`, `mercados`, `categorias`, `precos` e `usuarios` no banco (veja a estrutura em [Estrutura do banco](#estrutura-do-banco)).
 
 Suba o servidor embutido do PHP:
 
@@ -85,7 +86,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://localhost:8099/auth/callback.php
 ```
 
-Sem essas variáveis configuradas, o app funciona normalmente para visualizar preços — apenas o cadastro de novos preços e mercados fica bloqueado atrás do login.
+Sem essas variáveis configuradas, a tela de login mostra um aviso e ninguém consegue entrar — como todas as páginas exigem login, o app fica inacessível até configurar.
 
 ### Mapa de localização ao cadastrar mercado
 
