@@ -1174,6 +1174,205 @@ button {
     color: var(--cor-erro);
 }
 
+/* ---------- Análise da compra do mês ---------- */
+
+.form-analise {
+    margin-bottom: 24px;
+}
+
+.cesta-acoes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.lista-cesta {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 6px;
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio);
+    background: var(--cor-fundo);
+}
+
+.item-cesta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 6px;
+}
+
+.item-cesta[hidden] {
+    display: none;
+}
+
+.item-cesta + .item-cesta {
+    border-top: 1px solid var(--cor-borda);
+}
+
+.item-cesta__escolha {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.item-cesta input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    accent-color: var(--cor-primaria);
+}
+
+.item-cesta__nome {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 0.92rem;
+    min-width: 0;
+}
+
+.item-cesta__nome small {
+    font-weight: 400;
+    font-size: 0.76rem;
+    color: var(--cor-texto-suave);
+}
+
+.item-cesta__quantidade {
+    width: 66px;
+    padding: 8px;
+    text-align: center;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--cor-texto);
+    background: var(--cor-fundo-cartao);
+    border: 1px solid var(--cor-borda);
+    border-radius: 10px;
+}
+
+.item-cesta__quantidade:focus {
+    outline: none;
+    border-color: var(--cor-primaria);
+}
+
+.destaque-analise {
+    background: linear-gradient(135deg, var(--cor-primaria), var(--cor-primaria-escura));
+    color: var(--cor-texto-inverso);
+    border-radius: var(--raio-grande);
+    box-shadow: var(--sombra-elevada);
+    padding: 22px 20px;
+    margin-bottom: 24px;
+}
+
+.destaque-analise__selo {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.destaque-analise h2 {
+    margin: 10px 0 2px;
+    font-size: 1.5rem;
+}
+
+.destaque-analise__valor {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.destaque-analise__detalhe {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.destaque-analise__aviso,
+.destaque-analise__economia {
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.item-comparacao--fraco {
+    opacity: 0.72;
+}
+
+.etiqueta-aviso {
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--cor-texto-suave);
+    background: var(--cor-borda);
+}
+
+.item-comparacao__nota {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--cor-texto-suave);
+}
+
+.secao-ranking,
+.secao-divisao,
+.secao-itens-analise {
+    margin-bottom: 28px;
+}
+
+.lista-itens-mercado {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.87rem;
+}
+
+.lista-itens-mercado li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.lista-itens-mercado a {
+    color: var(--cor-texto);
+    min-width: 0;
+}
+
+.lista-itens-mercado li span {
+    color: var(--cor-texto-suave);
+    white-space: nowrap;
+}
+
+.diferenca-alta {
+    color: var(--cor-sucesso);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.diferenca-neutra {
+    color: var(--cor-texto-suave);
+}
+
+.link-analise {
+    display: block;
+    margin-bottom: 18px;
+}
+
 /* ---------- Responsivo: tablet e desktop ---------- */
 
 @media (min-width: 700px) {
@@ -1195,6 +1394,10 @@ button {
 
     .grade-mercados {
         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+
+    .destaque-analise__valor {
+        font-size: 2.4rem;
     }
 
     .campo-linha {

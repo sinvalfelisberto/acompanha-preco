@@ -439,3 +439,266 @@ function formatar_data(string $data): string
 
     return $timestamp ? date('d/m/Y', $timestamp) : $data;
 }
+
+/**
+ * Retorna o preço mais recente de cada produto em cada mercado — a "foto" atual
+ * do mercado, que serve de base para a análise da compra do mês.
+ *
+ * @param int|null    $diasValidade Considera apenas preços coletados nos últimos N dias (null = todos)
+ * @param string|null $categoria    Limita o resultado a uma categoria de produto
+ */
+function listar_precos_atuais(?int $diasValidade = null, ?string $categoria = null): array
+{
+    $pdo = obter_conexao();
+
+    $filtroInterno = '';
+    $filtroExterno = '';
+    $parametros = [];
+
+    if ($diasValidade !== null && $diasValidade > 0) {
+        // O corte por data entra também na subconsulta para que o "preço atual"
+        // seja o mais recente dentro do período, e não um registro antigo demais.
+        $dias = (int) $diasValidade;
+        $filtroInterno = " AND p2.data_registro >= (CURDATE() - INTERVAL {$dias} DAY)";
+        $filtroExterno = " AND pr.data_registro >= (CURDATE() - INTERVAL {$dias} DAY)";
+    }
+
+    if ($categoria !== null && $categoria !== '') {
+        $filtroExterno .= ' AND p.categoria = :categoria';
+        $parametros['categoria'] = $categoria;
+    }
+
+    $sql = "
+        SELECT
+            pr.produto_id,
+            p.nome AS produto_nome,
+            p.marca,
+            p.categoria,
+            p.unidade,
+            pr.mercado_id,
+            m.nome AS mercado_nome,
+            pr.preco,
+            pr.data_registro
+        FROM precos pr
+        INNER JOIN produtos p ON p.id = pr.produto_id
+        INNER JOIN mercados m ON m.id = pr.mercado_id
+        WHERE pr.id = (
+            SELECT p2.id
+            FROM precos p2
+            WHERE p2.produto_id = pr.produto_id
+              AND p2.mercado_id = pr.mercado_id
+              {$filtroInterno}
+            ORDER BY p2.data_registro DESC, p2.id DESC
+            LIMIT 1
+        )
+        {$filtroExterno}
+        ORDER BY p.nome ASC, pr.preco ASC
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($parametros);
+
+    return $stmt->fetchAll();
+}
+
+/**
+ * Analisa em qual mercado vale mais a pena fazer a compra do mês.
+ *
+ * Monta a cesta a partir das quantidades informadas e, para cada mercado,
+ * calcula quanto custaria a compra ali. Mercados que não têm todos os itens
+ * entram com uma estimativa: o que falta é somado pelo menor preço disponível
+ * em outro mercado, para que a comparação continue sendo entre cestas iguais.
+ *
+ * @param array $precosAtuais    Linhas de listar_precos_atuais()
+ * @param array $quantidades     produto_id => quantidade desejada (0 ou ausente = fora da cesta)
+ * @param float $coberturaMinima % da cesta que o mercado precisa ter para ser recomendado
+ */
+function analisar_compra_mensal(array $precosAtuais, array $quantidades, float $coberturaMinima = 50.0): array
+{
+    $itens = [];
+    $mercados = [];
+
+    foreach ($precosAtuais as $linha) {
+        $produtoId = (int) $linha['produto_id'];
+        $quantidade = (float) ($quantidades[$produtoId] ?? 0);
+
+        if ($quantidade <= 0) {
+            continue;
+        }
+
+        $mercadoId = (int) $linha['mercado_id'];
+        $preco = (float) $linha['preco'];
+        $mercados[$mercadoId] = $linha['mercado_nome'];
+
+        if (!isset($itens[$produtoId])) {
+            $itens[$produtoId] = [
+                'produto_id' => $produtoId,
+                'nome' => $linha['produto_nome'],
+                'marca' => $linha['marca'],
+                'categoria' => $linha['categoria'],
+                'unidade' => $linha['unidade'],
+                'quantidade' => $quantidade,
+                'precos' => [],
+                'melhor_preco' => $preco,
+                'melhor_mercado_id' => $mercadoId,
+                'pior_preco' => $preco,
+            ];
+        }
+
+        $itens[$produtoId]['precos'][$mercadoId] = $preco;
+
+        if ($preco < $itens[$produtoId]['melhor_preco']) {
+            $itens[$produtoId]['melhor_preco'] = $preco;
+            $itens[$produtoId]['melhor_mercado_id'] = $mercadoId;
+        }
+
+        if ($preco > $itens[$produtoId]['pior_preco']) {
+            $itens[$produtoId]['pior_preco'] = $preco;
+        }
+    }
+
+    $totalItens = count($itens);
+
+    if ($totalItens === 0) {
+        return [
+            'itens' => [],
+            'mercados' => [],
+            'cobertura_minima' => $coberturaMinima,
+            'total_itens' => 0,
+            'total_mercados' => 0,
+            'ranking' => [],
+            'melhor_mercado' => null,
+            'pior_mercado' => null,
+            'economia_ranking' => 0.0,
+            'total_otimo' => 0.0,
+            'compra_dividida' => [],
+            'economia_dividindo' => 0.0,
+        ];
+    }
+
+    $totalOtimo = 0.0;
+    foreach ($itens as $item) {
+        $totalOtimo += $item['melhor_preco'] * $item['quantidade'];
+    }
+
+    $ranking = [];
+    foreach ($mercados as $mercadoId => $mercadoNome) {
+        $total = 0.0;
+        $totalReferencia = 0.0;
+        $complemento = 0.0;
+        $cobertos = 0;
+        $faltantes = [];
+
+        foreach ($itens as $produtoId => $item) {
+            $subtotalOtimo = $item['melhor_preco'] * $item['quantidade'];
+
+            if (isset($item['precos'][$mercadoId])) {
+                $total += $item['precos'][$mercadoId] * $item['quantidade'];
+                $totalReferencia += $subtotalOtimo;
+                $cobertos++;
+            } else {
+                $complemento += $subtotalOtimo;
+                $faltantes[] = $item['nome'];
+            }
+        }
+
+        $ranking[] = [
+            'mercado_id' => $mercadoId,
+            'mercado_nome' => $mercadoNome,
+            'itens_cobertos' => $cobertos,
+            'itens_faltantes' => $faltantes,
+            'completo' => $faltantes === [],
+            'total' => $total,
+            'complemento' => $complemento,
+            'total_estimado' => $total + $complemento,
+            'cobertura' => ($cobertos / $totalItens) * 100,
+            // Quanto a cesta desse mercado sai acima do melhor preço possível,
+            // considerando só os itens que ele realmente tem.
+            'acima_do_melhor' => $totalReferencia > 0 ? (($total / $totalReferencia) - 1) * 100 : 0.0,
+        ];
+    }
+
+    // Um mercado com poucos itens da cesta sempre pareceria barato, porque quase
+    // tudo entraria no total pelo melhor preço de outro lugar. Por isso só disputa
+    // o topo do ranking quem cobre uma fatia relevante da cesta — e, se ninguém
+    // atingir o mínimo, valem os mercados de maior cobertura.
+    $maiorCobertura = 0.0;
+    foreach ($ranking as $mercado) {
+        $maiorCobertura = max($maiorCobertura, $mercado['cobertura']);
+    }
+
+    $corteCobertura = min($coberturaMinima, $maiorCobertura);
+
+    foreach ($ranking as &$mercado) {
+        $mercado['recomendavel'] = $mercado['cobertura'] >= $corteCobertura;
+    }
+    unset($mercado);
+
+    usort($ranking, function (array $a, array $b): int {
+        if ($a['recomendavel'] !== $b['recomendavel']) {
+            return $a['recomendavel'] ? -1 : 1;
+        }
+
+        return $a['total_estimado'] <=> $b['total_estimado'];
+    });
+
+    $compraDividida = [];
+    foreach ($itens as $item) {
+        $mercadoId = $item['melhor_mercado_id'];
+
+        if (!isset($compraDividida[$mercadoId])) {
+            $compraDividida[$mercadoId] = [
+                'mercado_id' => $mercadoId,
+                'mercado_nome' => $mercados[$mercadoId],
+                'itens' => [],
+                'total' => 0.0,
+            ];
+        }
+
+        $compraDividida[$mercadoId]['itens'][] = $item;
+        $compraDividida[$mercadoId]['total'] += $item['melhor_preco'] * $item['quantidade'];
+    }
+
+    usort($compraDividida, function (array $a, array $b): int {
+        return $b['total'] <=> $a['total'];
+    });
+
+    $melhorMercado = $ranking[0] ?? null;
+
+    // Comparação de economia só entre mercados recomendáveis: o total de quem
+    // cobre pouco da cesta é estimativa demais para servir de referência.
+    $piorMercado = null;
+    foreach ($ranking as $mercado) {
+        if (!$mercado['recomendavel']) {
+            continue;
+        }
+
+        if ($piorMercado === null || $mercado['total_estimado'] > $piorMercado['total_estimado']) {
+            $piorMercado = $mercado;
+        }
+    }
+
+    return [
+        'itens' => $itens,
+        'mercados' => $mercados,
+        'cobertura_minima' => $corteCobertura,
+        'total_itens' => $totalItens,
+        'total_mercados' => count($mercados),
+        'ranking' => $ranking,
+        'melhor_mercado' => $melhorMercado,
+        'pior_mercado' => $piorMercado,
+        'economia_ranking' => ($melhorMercado && $piorMercado)
+            ? $piorMercado['total_estimado'] - $melhorMercado['total_estimado']
+            : 0.0,
+        'total_otimo' => $totalOtimo,
+        'compra_dividida' => $compraDividida,
+        'economia_dividindo' => $melhorMercado ? $melhorMercado['total_estimado'] - $totalOtimo : 0.0,
+    ];
+}
+
+function formatar_quantidade(float $quantidade): string
+{
+    return $quantidade == (int) $quantidade
+        ? (string) (int) $quantidade
+        : rtrim(rtrim(number_format($quantidade, 2, ',', ''), '0'), ',');
+}

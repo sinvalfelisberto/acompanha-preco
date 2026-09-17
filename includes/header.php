@@ -84,6 +84,9 @@ if ($horaServidor < 12) {
         <a href="index.php" class="<?= $paginaAtiva === 'inicio' ? 'ativo' : '' ?>">
             <span aria-hidden="true">🏠</span> Início
         </a>
+        <a href="analise.php" class="<?= $paginaAtiva === 'analise' ? 'ativo' : '' ?>">
+            <span aria-hidden="true">📊</span> Compra do mês
+        </a>
         <a href="adicionar.php" class="<?= $paginaAtiva === 'adicionar' ? 'ativo' : '' ?>">
             <span aria-hidden="true">🛒</span> Incluir produto
         </a>

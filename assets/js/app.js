@@ -358,6 +358,60 @@
             campoPreco.value = valor;
         });
     }
+
+    /* ---------- Cesta da análise da compra do mês ---------- */
+
+    var formAnalise = document.getElementById('form-analise');
+    var listaCesta = document.getElementById('lista-cesta');
+    if (formAnalise) {
+        var filtroCesta = document.getElementById('filtro-cesta');
+        var itensCesta = listaCesta ? listaCesta.querySelectorAll('.item-cesta') : [];
+
+        if (filtroCesta) {
+            filtroCesta.addEventListener('input', function () {
+                var termo = filtroCesta.value.trim().toLowerCase();
+
+                Array.prototype.forEach.call(itensCesta, function (item) {
+                    var bate = !termo || item.getAttribute('data-nome').indexOf(termo) !== -1;
+                    item.hidden = !bate;
+                });
+            });
+
+            // Enter no filtro filtra a lista, não envia a cesta sem querer.
+            filtroCesta.addEventListener('keydown', function (evento) {
+                if (evento.key === 'Enter') evento.preventDefault();
+            });
+        }
+
+        function marcarTodos(marcado) {
+            Array.prototype.forEach.call(itensCesta, function (item) {
+                if (item.hidden) return;
+                var caixa = item.querySelector('input[type="checkbox"]');
+                if (caixa) caixa.checked = marcado;
+            });
+        }
+
+        var botaoMarcar = document.getElementById('cesta-marcar-todos');
+        var botaoDesmarcar = document.getElementById('cesta-desmarcar-todos');
+
+        if (botaoMarcar) botaoMarcar.addEventListener('click', function () { marcarTodos(true); });
+        if (botaoDesmarcar) botaoDesmarcar.addEventListener('click', function () { marcarTodos(false); });
+
+        // Mudar período ou categoria recarrega a página por GET: a lista de
+        // produtos muda, então a cesta é remontada já com tudo selecionado.
+        var selectDias = document.getElementById('analise-dias');
+        var selectCategoria = document.getElementById('analise-categoria');
+
+        function recarregarComFiltros() {
+            var parametros = new URLSearchParams();
+            if (selectDias) parametros.set('dias', selectDias.value);
+            if (selectCategoria && selectCategoria.value) parametros.set('categoria', selectCategoria.value);
+            window.location.href = 'analise.php?' + parametros.toString();
+        }
+
+        if (selectDias) selectDias.addEventListener('change', recarregarComFiltros);
+        if (selectCategoria) selectCategoria.addEventListener('change', recarregarComFiltros);
+    }
 })();
 
 /* ---------- Filtro instantâneo de produtos, no navegador (jQuery) ---------- */

@@ -13,6 +13,7 @@ Feita em PHP puro (sem framework), HTML e CSS, com visual moderno, responsivo (m
 - Listagem de produtos com o menor preço em destaque e o mercado correspondente
 - Busca instantânea por nome/marca e filtro por categoria, direto no navegador (sem recarregar a página a cada letra digitada)
 - Comparação completa entre mercados para cada produto, com % de economia e histórico de preços
+- **Análise da compra do mês** — monte a cesta (produtos e quantidades), escolha o período dos preços e veja o ranking dos mercados: quanto a cesta custa em cada um, quanto da cesta cada mercado cobre, quanto sai acima do melhor preço e quanto daria para economizar dividindo a compra entre os mercados mais baratos
 - Cadastro, edição e exclusão de preços, mercados e categorias — com autocomplete/dropdown para evitar duplicidade e modal de confirmação antes de excluir
 - Preenchimento automático de nome e endereço do mercado a partir da localização do dispositivo, com mapa interativo mostrando os mercados próximos para selecionar (OpenStreetMap/Nominatim/Overpass — gratuito, sem chave de API)
 - Menu lateral (hambúrguer) com foto, saudação e nome do usuário, atalhos para incluir produto/mercado/categoria, alternância de tema e logout

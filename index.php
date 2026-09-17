@@ -44,6 +44,10 @@ require __DIR__ . '/includes/header.php';
     </form>
 </section>
 
+<a href="analise.php" class="botao botao--secundario botao--bloco link-analise">
+    📊 Onde vale mais a pena fazer a compra do mês?
+</a>
+
 <div id="resultados-produtos">
     <?php require __DIR__ . '/includes/resultados_produtos.php'; ?>
 </div>
